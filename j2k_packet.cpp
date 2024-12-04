@@ -675,58 +675,69 @@ int read_tile(tile_ *tile, const coc_marker *cocs, const dfs_marker *dfs) {
   // bool is_packet_read[3][6][4 * 270] = {false};
   switch (PO) {
     case PCRL:
-      step_x = 32;
-      step_y = 32;
-      for (uint32_t c = CS; c < CE; ++c) {
-        const coc_marker *coc = &cocs[c];
-        for (uint32_t r = RS; r < coc->NL + 1; ++r) {
-          step_x = LOCAL_MIN(step_x, coc->prw[r]);
-          step_y = LOCAL_MIN(step_y, coc->prh[r]);
+      if (tile->crp.empty()) {
+        step_x = 32;
+        step_y = 32;
+        for (uint32_t c = CS; c < CE; ++c) {
+          const coc_marker *coc = &cocs[c];
+          for (uint32_t r = RS; r < coc->NL + 1; ++r) {
+            step_x = LOCAL_MIN(step_x, coc->prw[r]);
+            step_y = LOCAL_MIN(step_y, coc->prh[r]);
+          }
         }
-      }
 
-      step_x = 1 << step_x;
-      step_y = 1 << step_y;
+        step_x = 1 << step_x;
+        step_y = 1 << step_y;
 
-      for (uint32_t y = tile->coord.y0; y < tile->coord.y1; y += step_y) {
-        for (uint32_t x = tile->coord.x0; x < tile->coord.x1; x += step_x) {
-          for (uint32_t c = CS; c < CE; ++c) {
-            const coc_marker *coc = &cocs[c];
-            tcomp_ *tcp           = &(tile->tcomp[c]);
-            RE                    = coc->NL + 1;
-            for (uint32_t r = RS; r < RE; ++r) {
-              res_ *rp     = &tcp->res[r];
-              uint32_t xNL = dfs->hor_depth[coc->NL - r];  // get_hor_depth(coc->NL - r, dfs);
-              uint32_t yNL = dfs->ver_depth[coc->NL - r];  // get_ver_depth(coc->NL - r, dfs);
+        for (uint32_t y = tile->coord.y0; y < tile->coord.y1; y += step_y) {
+          for (uint32_t x = tile->coord.x0; x < tile->coord.x1; x += step_x) {
+            for (uint32_t c = CS; c < CE; ++c) {
+              const coc_marker *coc = &cocs[c];
+              tcomp_ *tcp           = &(tile->tcomp[c]);
+              RE                    = coc->NL + 1;
+              for (uint32_t r = RS; r < RE; ++r) {
+                res_ *rp     = &tcp->res[r];
+                uint32_t xNL = dfs->hor_depth[coc->NL - r];  // get_hor_depth(coc->NL - r, dfs);
+                uint32_t yNL = dfs->ver_depth[coc->NL - r];  // get_ver_depth(coc->NL - r, dfs);
 
-              if (!((x % (tcp->sub_x * (1U << (coc->prw[r] + xNL))) == 0)
-                    || ((x == tile->coord.x0)
-                        && ((rp->coord.x0 * (1U << (xNL))) % (1U << (coc->prw[r] + xNL)) != 0)))) {
-                continue;
-              }
-              if (!((y % (tcp->sub_y * (1U << (coc->prh[r] + yNL))) == 0)
-                    || ((y == tile->coord.y0)
-                        && ((rp->coord.y0 * (1U << (yNL))) % (1U << (coc->prh[r] + yNL)) != 0)))) {
-                continue;
-              }
+                if (!((x % (tcp->sub_x * (1U << (coc->prw[r] + xNL))) == 0)
+                      || ((x == tile->coord.x0)
+                          && ((rp->coord.x0 * (1U << (xNL))) % (1U << (coc->prw[r] + xNL)) != 0)))) {
+                  continue;
+                }
+                if (!((y % (tcp->sub_y * (1U << (coc->prh[r] + yNL))) == 0)
+                      || ((y == tile->coord.y0)
+                          && ((rp->coord.y0 * (1U << (yNL))) % (1U << (coc->prh[r] + yNL)) != 0)))) {
+                  continue;
+                }
 
-              uint32_t p = py[c][r] * rp->npw + px[c][r];
-              prec_ *pp  = &rp->prec[p];
+                uint32_t p = py[c][r] * rp->npw + px[c][r];
+                // save identified precinct information as a sequence
+                crp_status tmp{(uint8_t)c, (uint8_t)r, (uint16_t)p};
+                tile->crp.push_back(tmp);
 
-              // if (is_packet_read[c][r][p] == false) {
-              ret = read_packet(tile->buf, pp, coc);
-              if (ret) {
-                return ret;
-              }
-              // is_packet_read[c][r][p] = true;
-              // }
+                prec_ *pp = &rp->prec[p];
+                ret       = read_packet(tile->buf, pp, coc);
+                if (ret) {
+                  return ret;
+                }
 
-              px[c][r] += 1;
-              if (px[c][r] == rp->npw) {
-                px[c][r] = 0;
-                py[c][r] += 1;
+                px[c][r] += 1;
+                if (px[c][r] == rp->npw) {
+                  px[c][r] = 0;
+                  py[c][r] += 1;
+                }
               }
             }
+          }
+        }
+      } else {
+        // use saved sequence of precincts
+        for (uint32_t i = 0; i < tile->crp.size(); ++i) {
+          prec_ *pp = &tile->tcomp[tile->crp[i].c].res[tile->crp[i].r].prec[tile->crp[i].p];
+          ret       = read_packet(tile->buf, pp, &cocs[tile->crp[i].c]);
+          if (ret) {
+            return ret;
           }
         }
       }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project (JP2Parser LANGUAGES CXX DESCRIPTION "JPEG 2000 codestream parser")
+project (PacketParser LANGUAGES CXX DESCRIPTION "JPEG 2000 codestream parser")
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
