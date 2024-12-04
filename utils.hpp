@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdio>
+#include <cstddef>
 #include "type.hpp"
 
 #define AV_LOG_WARNING 0
